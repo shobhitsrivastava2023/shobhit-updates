@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Shobhit Updates",
-  description: "My updates and struggles, showing an experiment wether the struggle is worth it or not.",
+  description:
+    "My updates and struggles, showing an experiment wether the struggle is worth it or not.",
 };
 
 export default function RootLayout({
@@ -24,6 +25,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        
+<link rel="icon" type="image/png" className="text-white bg-white" sizes="32x32" href="/SH.svg" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

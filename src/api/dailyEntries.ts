@@ -1,5 +1,5 @@
 import { supabase } from "../supabase";
-import { formatDateForPath, generateMarkdownContent } from "../utils/dateUtils";
+import { formatDateForPath } from "../utils/dateUtils"; // Assuming generateMarkdownContent is no longer needed here
 
 // --- Type Definitions ---
 
@@ -8,7 +8,7 @@ export interface DailyEntry {
   date: string;
   title: string;
   description: string | null;
-  blog_url: string | null;
+  blog_url: string | null; // This can be deprecated or used for an optional external link
   markdown_path: string;
   attachments: string[];
   references: string[];
@@ -16,10 +16,15 @@ export interface DailyEntry {
   updated_at: string;
 }
 
-export type NewDailyEntry = Pick<
-  DailyEntry,
-  "date" | "title" | "description" | "blog_url" | "attachments" | "references"
->;
+// The form now provides the full markdown content directly
+export type NewDailyEntry = {
+  date: string;
+  title: string;
+  description: string | null;
+  content: string; // The full markdown content from the admin panel
+  attachments: string[];
+  references: string[];
+};
 
 type ApiResponse<T> =
   | { success: true; data: T }
@@ -47,45 +52,72 @@ export const dailyEntriesAPI = {
   },
 
   /**
-   * Creates a new daily entry.
-   * @param entryData The data for the new entry.
+   * Fetches the content of a markdown file from Supabase storage.
+   * @param path The full path to the markdown file.
    */
-  async createEntry(
-    entryData: NewDailyEntry
-  ): Promise<ApiResponse<DailyEntry>> {
+  async getMarkdownContent(path: string): Promise<ApiResponse<string>> {
     try {
-      const uniqueSuffix = Date.now();
-      const { path } = formatDateForPath(entryData.date);
-      const finalPath = `${path}-${uniqueSuffix}.md`;
-      const markdownContent = generateMarkdownContent(entryData);
-
-      // 1. Upload markdown to storage
-      const { error: uploadError } = await supabase.storage
+      const { data, error } = await supabase.storage
         .from("daily-entries")
-        .upload(finalPath, new Blob([markdownContent], { type: "text/markdown" }));
+        .download(path);
 
-      if (uploadError) throw uploadError;
-
-      // 2. Insert metadata into the database
-      const { data, error: dbError } = await supabase
-        .from("daily_entries")
-        .insert([
-          {
-            ...entryData,
-            markdown_path: path,
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single(); // .single() is great here to get the object directly
-
-      if (dbError) throw dbError;
-      return { success: true, data };
+      if (error) throw error;
+      
+      const content = await data.text();
+      return { success: true, data: content };
     } catch (error: any) {
-      console.error("Error creating entry:", error.message);
+      console.error(`Error fetching markdown content for path: ${path}`, error.message);
       return { success: false, error };
     }
   },
 
-  // You can continue adding your other typed functions here.
+  /**
+   * Creates a new daily entry.
+   * @param entryData The data for the new entry, including the markdown content.
+   */
+// In dailyEntries.ts - Fix the createEntry function
+// In dailyEntries.ts - Fix the createEntry function
+
+async createEntry(
+  entryData: NewDailyEntry
+): Promise<ApiResponse<DailyEntry>> {
+  try {
+    const { content, ...dbData } = entryData;
+    
+    // Create a simpler path structure without nested folders
+    const date = new Date(entryData.date);
+    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const uniqueSuffix = Date.now();
+    
+    // Simple flat structure: YYYY-MM-DD-timestamp.md
+    const finalPath = `${dateStr}-${uniqueSuffix}.md`;
+
+    // 1. Upload the user-provided markdown content to storage
+    const { error: uploadError } = await supabase.storage
+      .from("daily-entries")
+      .upload(finalPath, new Blob([content], { type: "text/markdown" }));
+    
+    if (uploadError) throw uploadError;
+
+    // 2. Insert metadata into the database
+    const { data, error: dbError } = await supabase
+      .from("daily_entries")
+      .insert([
+        {
+          ...dbData,
+          markdown_path: finalPath,
+          updated_at: new Date().toISOString(),
+          blog_url: null,
+        },
+      ])
+      .select()
+      .single();
+    
+    if (dbError) throw dbError;
+    return { success: true, data };
+  } catch (error: any) {
+    console.error("Error creating entry:", error.message);
+    return { success: false, error };
+  }
+}
 };
