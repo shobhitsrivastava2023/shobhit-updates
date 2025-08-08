@@ -1,15 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronRight, ExternalLink, Calendar, FileText, Link2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChevronRight, ExternalLink, Calendar, FileText, Link2, Loader2, Filter, X } from 'lucide-react';
 import { dailyEntriesAPI, DailyEntry } from '@/api/dailyEntries';
 
-const DailyEntriesTable = () => {
-  // 2. Set up state for entries, loading, and errors
+interface DailyEntriesTableProps {
+  selectedDate?: string;
+  onDateClear?: () => void;
+}
+
+const DailyEntriesTable = ({ selectedDate, onDateClear }: DailyEntriesTableProps) => {
+  // State management
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
 
-  // 3. Fetch data when the component mounts
+  // Fetch data when the component mounts
   useEffect(() => {
     const fetchEntries = async () => {
       setLoading(true);
@@ -26,7 +31,19 @@ const DailyEntriesTable = () => {
     };
 
     fetchEntries();
-  }, []); // Empty dependency array ensures this runs only once
+  }, []);
+
+  // Filter entries based on selected date
+  const filteredEntries = useMemo(() => {
+    if (!selectedDate) return entries;
+    
+    return entries.filter(entry => {
+      // Compare dates in YYYY-MM-DD format
+      const entryDate = new Date(entry.date).toISOString().split('T')[0];
+      const filterDate = new Date(selectedDate).toISOString().split('T')[0];
+      return entryDate === filterDate;
+    });
+  }, [entries, selectedDate]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -46,14 +63,45 @@ const DailyEntriesTable = () => {
     }
   };
 
+  const getEntriesCountText = () => {
+    if (selectedDate) {
+      const selectedDateFormatted = new Date(selectedDate).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      return `${filteredEntries.length} ${filteredEntries.length === 1 ? 'entry' : 'entries'} for ${selectedDateFormatted}`;
+    }
+    return `${filteredEntries.length} total ${filteredEntries.length === 1 ? 'entry' : 'entries'}`;
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-8">
       <div className="bg-[#0a0a0a] rounded-lg border border-[#1a1a1a] overflow-hidden">
         <div className="border-b border-[#1a1a1a] px-6 py-4">
-          <h2 className="text-xl font-medium text-[#e5e5e5] flex items-center gap-2">
-            <FileText size={20} />
-            Daily Entries
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-medium text-[#e5e5e5] flex items-center gap-2">
+              <FileText size={20} />
+              Daily Entries
+            </h2>
+            <div className="flex items-center gap-2 text-sm text-[#a0a0a0]">
+              {selectedDate && (
+                <div className="flex items-center gap-2 bg-[#1a1a1a] px-3 py-1 rounded-full">
+                  <Filter size={14} />
+                  <span>Filtered</span>
+                  <button
+                    onClick={onDateClear}
+                    className="hover:text-[#e5e5e5] transition-colors"
+                    title="Clear filter"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+              <span>{getEntriesCountText()}</span>
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -68,30 +116,55 @@ const DailyEntriesTable = () => {
               </tr>
             </thead>
             <tbody>
-              {/* 4. Conditional UI for loading, error, and empty states */}
               {loading ? (
-                <tr><td colSpan={5} className="text-center py-12 text-[#666]"><Loader2 className="mx-auto animate-spin" /></td></tr>
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-[#666]">
+                    <Loader2 className="mx-auto animate-spin" />
+                  </td>
+                </tr>
               ) : error ? (
-                <tr><td colSpan={5} className="text-center py-12 text-red-500">Error: {error}</td></tr>
-              ) : entries.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-12"><p className="text-[#666]">No entries found.</p></td></tr>
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-red-500">
+                    Error: {error}
+                  </td>
+                </tr>
+              ) : filteredEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12">
+                    <p className="text-[#666]">
+                      {selectedDate 
+                        ? 'No entries found for the selected date.' 
+                        : 'No entries found.'
+                      }
+                    </p>
+                    {selectedDate && onDateClear && (
+                      <button
+                        onClick={onDateClear}
+                        className="mt-2 text-sm text-[#4ade80] hover:text-[#5ade85] underline"
+                      >
+                        Show all entries
+                      </button>
+                    )}
+                  </td>
+                </tr>
               ) : (
-                entries.map((entry: DailyEntry) => (
+                filteredEntries.map((entry: DailyEntry) => (
                   <React.Fragment key={entry.id}>
                     <tr 
-                      className="border-b border-[#1a1a1a] hover:bg-[#111111] cursor-pointer transition-colors duration-150"
+                      className={`border-b border-[#1a1a1a] hover:bg-[#111111] cursor-pointer transition-colors duration-150 ${
+                        selectedDate ? 'bg-[#0f0f0f]' : ''
+                      }`}
                       onClick={() => handleEntryClick(entry.id)}
                     >
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3 text-[#a0a0a0] text-sm">
-                          <Calendar size={30} />
+                          <Calendar size={16} />
                           {formatDate(entry.date)}
                         </div>
                       </td>
                       <td className="py-4 px-6 text-[#e5e5e5] font-medium text-sm">{entry.title}</td>
                       <td className="py-4 px-6 text-[#a0a0a0] text-sm">{entry.attachments.length} files</td>
-                      {/* Note the quotes for the "references" property */}
-                      <td className="py-4 px-6 text-[#a0a0a0] text-sm">{entry["references"].length} refs</td>
+                      <td className="py-4 px-6 text-[#a0a0a0] text-sm">{entry.references.length} refs</td>
                       <td className="py-4 px-6">
                         <ChevronRight 
                           size={16} 
@@ -113,15 +186,37 @@ const DailyEntriesTable = () => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               <div>
-                                <h4 className="text-sm font-medium text-[#e5e5e5] mb-2 flex items-center gap-2"><FileText size={14} />Attachments</h4>
+                                <h4 className="text-sm font-medium text-[#e5e5e5] mb-2 flex items-center gap-2">
+                                  <FileText size={14} />
+                                  Attachments
+                                </h4>
                                 <div className="space-y-1">
-                                  {entry.attachments.map((file, i) => <div key={i} className="text-sm text-[#a0a0a0] bg-[#1a1a1a] px-3 py-2 rounded">{file}</div>)}
+                                  {entry.attachments.length > 0 ? (
+                                    entry.attachments.map((file, i) => (
+                                      <div key={i} className="text-sm text-[#a0a0a0] bg-[#1a1a1a] px-3 py-2 rounded">
+                                        {file}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-sm text-[#666666] italic">No attachments</div>
+                                  )}
                                 </div>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium text-[#e5e5e5] mb-2 flex items-center gap-2"><Link2 size={14} />References</h4>
+                                <h4 className="text-sm font-medium text-[#e5e5e5] mb-2 flex items-center gap-2">
+                                  <Link2 size={14} />
+                                  References
+                                </h4>
                                 <div className="space-y-1">
-                                  {entry["references"].map((ref, i) => <div key={i} className="text-sm text-[#a0a0a0] bg-[#1a1a1a] px-3 py-2 rounded">{ref}</div>)}
+                                  {entry.references.length > 0 ? (
+                                    entry.references.map((ref, i) => (
+                                      <div key={i} className="text-sm text-[#a0a0a0] bg-[#1a1a1a] px-3 py-2 rounded">
+                                        {ref}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-sm text-[#666666] italic">No references</div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -132,7 +227,7 @@ const DailyEntriesTable = () => {
                                     e.stopPropagation();
                                     handleBlogClick(entry.blog_url);
                                   }}
-                                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] border border-[#3a3a3a] rounded text-sm font-medium text-[#e5e5e5]"
+                                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] border border-[#3a3a3a] rounded text-sm font-medium text-[#e5e5e5] transition-colors duration-150"
                                 >
                                   <ExternalLink size={14} />
                                   Open Blog Post
